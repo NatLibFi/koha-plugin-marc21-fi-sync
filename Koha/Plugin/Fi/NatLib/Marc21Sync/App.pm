@@ -4,6 +4,8 @@ use Modern::Perl; use utf8; use open qw(:utf8);
 use Carp;
 use DateTime;
 use Koha::Cache;
+use Koha::Token;
+use Koha::Cache::Memory::Lite;
 
 use base qw(
     Koha::Plugin::Fi::NatLib::Marc21Sync::App::Initiate
@@ -98,6 +100,20 @@ sub log {
     return;
 }
 
+sub GenerateCSRF {
+    my ( $self ) = @_;
+
+    my $memory_cache = Koha::Cache::Memory::Lite->get_instance;
+    my $cache_key    = "CSRF-TOKEN";
+    my $cached       = $memory_cache->get_from_cache($cache_key);
+    return $cached if $cached;
+
+    # NOTE: this is hacky way to obtain session_id from the context directly!
+    my $session_id = $C4::Context::context->{activeuser};
+    my $csrf_token = Koha::Token->new->generate_csrf( { session_id => scalar $session_id } );
+    $memory_cache->set_in_cache( $cache_key, $csrf_token );
+    return $csrf_token;
+}
 
 
 ## no critic (Subroutines::RequireArgUnpacking);
@@ -114,6 +130,7 @@ sub get_template {
     my $self = shift;
     my $template = $self->{plugin}->get_template(@_);
     $template->param(
+        koha_version => C4::Context->preference('Version'),
         configuration => $self->{configuration},
         metadata => {
             plugin_name => $self->{plugin}{metadata}{name},
