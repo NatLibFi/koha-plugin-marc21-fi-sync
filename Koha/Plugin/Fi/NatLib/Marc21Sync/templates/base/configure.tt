@@ -38,7 +38,7 @@
     <form method="POST">
         <input type="hidden" name="class" value="[% CLASS %]"/>
         <input type="hidden" name="method" value="[% METHOD %]"/>
-
+        [% IF koha_version >= '24.05'; INCLUDE 'csrf-token.inc'; END %]
         [% FOR config IN configuration %]
         <div class="form-group row hoverable">
             <label for="[% config.name %]" class="col-md-4 col-2 col-form-label">[% config.name_display %]: </label>
