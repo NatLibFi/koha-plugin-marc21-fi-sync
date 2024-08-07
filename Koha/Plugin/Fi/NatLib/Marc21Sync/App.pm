@@ -52,16 +52,21 @@ sub preconfig {
 sub configure_plugin {
     my ( $self, $args ) = @_;
     my $cgi = $self->{plugin}{cgi};
-    unless ( $cgi->param('save') ) {
-        my $template = $self->get_template({ file => 'templates/base/configure.tt' });
-        $self->output_html( $template->output() );
-    }
-    else {
+    if ( $cgi->param('save') ) {
         foreach my $config ( @{$self->{configuration}} ) {
             $self->store_data( { $config->{name} => scalar $cgi->param( $config->{name} ) } );
         }
         Koha::Caches->get_instance('plugins')->clear_from_cache($self->{config_cache_key});
         $self->go_home();
+    } elsif ( $cgi->param('restore_defaults') ) {
+        foreach my $config ( @{$self->{configuration}} ) {
+            $self->store_data( { $config->{name} => $config->{default} } );
+        }
+        Koha::Caches->get_instance('plugins')->clear_from_cache($self->{config_cache_key});
+        $self->go_home();
+    } else {
+        my $template = $self->get_template({ file => 'templates/base/configure.tt' });
+        $self->output_html( $template->output() );
     }
     return;
 }
