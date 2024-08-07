@@ -118,6 +118,7 @@ sub get_template {
             plugin_homepage => $self->{plugin}{metadata}{homepage},
             plugin_last_upgraded => $self->retrieve_data('last_upgraded'),
             plugin_last_logs => $self->retrieve_data('last_logs'),
+            plugin_default_method => $self->{plugin}{metadata}{default_method},
         },
     );
     return $template;

@@ -25,19 +25,7 @@
 [% INCLUDE 'header.inc' %]
 [% INCLUDE 'cat-search.inc' %]
 
-[% WRAPPER 'sub-header.inc' %]
-    [% WRAPPER breadcrumbs %]
-        [% WRAPPER breadcrumb_item %]
-            <a href="/cgi-bin/koha/plugins/plugins-home.pl">Plugins</a>
-        [% END %]
-        [% WRAPPER breadcrumb_item %]
-            <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&method=tool">[% metadata.plugin_name %]</a>
-        [% END %]
-        [% WRAPPER breadcrumb_item bc_active= 1 %]
-            <span>Configuration</span>
-        [% END %]
-    [% END #/ WRAPPER breadcrumbs %]
-[% END #/ WRAPPER sub-header.inc %]
+[% INCLUDE 'plugin_breadcrumbs.inc' active_text='Configuration' %]
 
 <div class="main container-fluid">
 

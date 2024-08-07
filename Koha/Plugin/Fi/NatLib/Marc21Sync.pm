@@ -22,6 +22,7 @@ our $metadata = {
     minimum_version => '23.1100000',
     maximum_version => undef,
     version         => $VERSION,
+    default_method  => __PACKAGE__->can('tool') ? 'tool' : __PACKAGE__->can('report') ? 'report' : __PACKAGE__->can('configure') ? 'configure' : '',
 };
 
 
