@@ -103,8 +103,11 @@
         </div>
         [% END %]
 
-        <input type="hidden" name="save" value="1" />
-        <input type="submit" value="Save configuration" />
+        <input type="submit" name="save" value="Save configuration" />
+        <input type="submit" name="restore_defaults" class="btn btn-danger" value="Reset to defaults"
+            onclick="return confirm('Are you sure you want to reset all CONFIGURATION settings to defaults?');"
+            title="This will reset all settings to plugin defaults and erase all changes you have made."
+        />
     </form>
     <hr/>
 
