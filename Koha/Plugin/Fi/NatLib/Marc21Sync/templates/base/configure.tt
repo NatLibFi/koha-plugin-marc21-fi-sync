@@ -1,0 +1,140 @@
+[% USE raw %]
+[% USE Asset %]
+[% USE KohaDates %]
+[% PROCESS 'i18n.inc' %]
+[% INCLUDE 'doc-head-open.inc' %]
+<title>Koha: [% metadata.plugin_name %]: Configuration</title>
+[% INCLUDE 'doc-head-close.inc' %]
+<style>
+    .card {
+        margin-top: 20px;
+    }
+    .hoverable {
+        padding: 3px;
+        margin-bottom: 0;
+        border-radius: 5px;
+        transition: background-color 0.2s;
+    }
+    .hoverable:hover {
+        background-color: #fdfdfd;
+    }
+</style>
+</head>
+
+<body>
+[% INCLUDE 'header.inc' %]
+[% INCLUDE 'cat-search.inc' %]
+
+[% INCLUDE 'plugin_breadcrumbs.inc' active_text='Configuration' %]
+
+<div class="main container-fluid">
+
+    <!-- We can access our own plugins resource files using the PLUGIN_PATH variable. But this needs to be configured in apache (?) -->
+    <!-- <img src="[% PLUGIN_PATH %]/pics/logo.png" /> -->
+    <div class="page-header">
+        <h2>[% metadata.plugin_name %] Configuration</h2>
+    </div>
+
+    <form method="POST">
+        <input type="hidden" name="class" value="[% CLASS %]"/>
+        <input type="hidden" name="method" value="[% METHOD %]"/>
+        [% IF koha_version >= '24.05'; INCLUDE 'csrf-token.inc'; END %]
+        [% FOR config IN configuration %]
+        <div class="form-group row hoverable">
+            <label for="[% config.name %]" class="col-md-4 col-2 col-form-label">[% config.name_display %]: </label>
+            <div class="col-lg-5 col-md-7 col-9">
+                [% SWITCH config.type %]
+                    [% CASE 'select' %]
+                        <select name="[% config.name %]" class="form-control">
+                            [% FOREACH option IN config.options %]
+                                <option value="[% option.value %]" [% IF option.value == config.value %]selected="selected"[% END %]>[% option.label %]</option>
+                            [% END %]
+                        </select>
+                    [% CASE 'checkbox' %]
+                        <input type="checkbox" name="[% config.name %]" value="1" [% IF config.value %]checked="checked"[% END %] />
+                    [% CASE 'textarea' %]
+                        <textarea name="[% config.name %]" class="form-control" rows="5">[% config.value | html %]</textarea>
+                    [% CASE 'password' %]
+                        <input type="password" class="form-control" name="[% config.name %]" value="[% config.value | html %]" />
+                    [% CASE 'text' %]
+                        <input type="text" class="form-control" name="[% config.name %]" value="[% config.value | html %]" />
+                    [% CASE 'number' %]
+                        <input type="number" class="form-control" name="[% config.name %]" value="[% config.value | html %]" />
+                    [% CASE 'date' %]
+                        <input type="date" class="form-control" name="[% config.name %]" value="[% config.value | html %]" />
+                    [% CASE 'time' %]
+                        <input type="time" class="form-control" name="[% config.name %]" value="[% config.value | html %]" />
+                    [% CASE 'datetime' %]
+                        <input type="datetime-local" class="form-control" name="[% config.name %]" value="[% config.value | html %]" />
+                    [% CASE 'email' %]
+                        <input type="email" class="form-control" name="[% config.name %]" value="[% config.value | html %]" />
+                    [% CASE 'url' %]
+                        <input type="url" class="form-control" name="[% config.name %]" value="[% config.value | html %]" />
+                    [% CASE 'tel' %]
+                        <input type="tel" class="form-control" name="[% config.name %]" value="[% config.value | html %]" />
+                    [% CASE 'color' %]
+                        <input type="color" class="form-control" name="[% config.name %]" value="[% config.value | html %]" />
+                    [% CASE 'range' %]
+                        <input type="range" class="form-control" name="[% config.name %]" value="[% config.value | html %]" />
+                    [% CASE 'hidden' %]
+                        <input type="hidden" name="[% config.name %]" value="[% config.value | html %]" />
+                    [% CASE 'file' %]
+                        <input type="file" class="form-control" name="[% config.name %]" value="[% config.value | html %]" />
+                    [% CASE 'image' %]
+                        <input type="image" class="form-control" name="[% config.name %]" value="[% config.value | html %]" />
+                    [% CASE 'radiobuttons' %]
+                        [% FOREACH option IN config.options %]
+                            <div class="radio">
+                                <label>
+                                  <input type="radio" value="" name="[% config.name %]" value="[% option.value %]" [% IF option.value == config.value %]checked="checked"[% END %]>
+                                    [% option.label %]
+                                </label>
+                            </div>
+                        [% END %]
+                    [% CASE 'tel' %]
+                        <input type="tel" class="form-control" name="[% config.name %]" value="[% config.value | html %]" />
+                    [% CASE %]
+                        <b>WARNING:</b> Unknown field type: [% config.type %]
+                [% END %]
+                <small class="form-text text-muted">[% config.description %]</small>
+            </div>
+            <div class="col-lg-3 col-1">
+            </div>
+        </div>
+        [% END %]
+
+        <input type="submit" name="save" value="Save configuration" />
+        <input type="submit" name="restore_defaults" class="btn btn-danger" value="Reset to defaults"
+            onclick="return confirm('Are you sure you want to reset all CONFIGURATION settings to defaults?');"
+            title="This will reset all settings to plugin defaults and erase all changes you have made."
+        />
+    </form>
+    <hr/>
+
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">Last operation logs:</h5>
+            <p class="card-text">
+            [% IF metadata.plugin_last_logs %]
+                <pre>[% metadata.plugin_last_logs | html %]</pre>
+            [% ELSE %]
+                No any logs recorded.
+            [% END %]
+            </p>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">Plugin upgrade status:</h5>
+            <p class="card-text">
+            [% IF metadata.plugin_last_upgraded %]
+                Plugin was last upgraded on this system on [% metadata.plugin_last_upgraded | $KohaDates with_hours => 1 %]
+            [% ELSE %]
+                Plugin has never been upgraded.
+            [% END %]
+            </p>
+        </div>
+    </div>
+
+[% INCLUDE 'intranet-bottom.inc' %]
