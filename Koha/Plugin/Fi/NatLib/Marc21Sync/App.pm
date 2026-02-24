@@ -16,6 +16,7 @@ use base qw(
 );
 
 our $MAX_LOG_LENGTH = 200_000;
+our $LOG_FILE;
 
 sub new {
     my $class = shift;
