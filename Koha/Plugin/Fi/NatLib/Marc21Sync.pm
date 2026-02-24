@@ -89,6 +89,9 @@ sub new {
         app => Koha::Plugin::Fi::NatLib::Marc21Sync::App->new({ configuration => $configuration }),
     });
     $self->{app}->preconfig($self);
+
+    $self->{app}->logf( 0, "LOADED" );
+
     return $self;
 }
 
