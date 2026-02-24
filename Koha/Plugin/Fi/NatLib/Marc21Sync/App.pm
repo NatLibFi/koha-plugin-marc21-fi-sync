@@ -15,6 +15,8 @@ use base qw(
     Koha::Plugin::Fi::NatLib::Marc21Sync::App::Defaults
 );
 
+our $MAX_LOG_LENGTH = 200_000;
+
 sub new {
     my $class = shift;
     my $args = shift;
@@ -46,7 +48,11 @@ sub preconfig {
         $self->{configuration} = $cached_value;
     }
     # also make hash of configuration in $self->{config}:
-    $self->{config} = { map { $_->{name} => $_->{value} } @{$self->{configuration}} };
+    $self->{config} = {
+        ( map { $_->{name} => $_->{value} } @{$self->{configuration}} ),
+        log_level => $plugin->retrieve_data('log_level') // 1,
+        log_preserve => $plugin->retrieve_data('log_preserve') // 3,
+    };
     return $self;
 }
 
@@ -57,14 +63,21 @@ sub configure_plugin {
         foreach my $config ( @{$self->{configuration}} ) {
             $self->store_data( { $config->{name} => scalar $cgi->param( $config->{name} ) } );
         }
+        $self->store_data( { log_level => scalar $cgi->param('log_level') } );
+        $self->store_data( { log_preserve => scalar $cgi->param('log_preserve') } );
         Koha::Caches->get_instance('plugins')->clear_from_cache($self->{config_cache_key});
         $self->go_home();
     } elsif ( $cgi->param('restore_defaults') ) {
         foreach my $config ( @{$self->{configuration}} ) {
             $self->store_data( { $config->{name} => $config->{default} } );
         }
+        $self->store_data( { log_level => 1 } );
+        $self->store_data( { log_preserve => 3 } );
         Koha::Caches->get_instance('plugins')->clear_from_cache($self->{config_cache_key});
         $self->go_home();
+    } elsif ( $cgi->param('clean_logs_now') ) {
+        $self->trim_log( seconds => 0 );
+        $self->go_configure();
     } else {
         my $template = $self->get_template({ file => 'templates/base/configure.tt' });
         $self->output_html( $template->output() );
@@ -83,18 +96,80 @@ sub set_log {
     return;
 }
 
-sub log {
-    my ( $self, $message ) = @_;
+sub trim_log {
+    my ($self) = shift;
+    my @time_length_options = @_ ? @_ : ( days => $self->{config}{log_preserve} // 2 );
+    my $log_text = $self->retrieve_data('last_logs') // return;
+    my $date = DateTime->now( time_zone => 'local' )->subtract( @time_length_options );
+    my $date_s = $date->ymd('-') . ' ' . $date->hms(':');      # YYYY-MM-DD HH:MM:SS
 
-    # TODO: fix race conditions when two processes writes to the log var by locking SQL table plugin_data:
+    my @in = split /\n/, $log_text, -1;
+    my @out;
+    my $keep = 0; # to the first valid timestamp in the string (good against "truncated" beginnings)
+
+    for my $line (@in) {
+        if ( $line =~ /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]/ ) {
+            $keep = ($1 ge $date_s);     # string compare works for ISO format
+            push @out, $line if $keep;
+        } else {
+            push @out, $line if $keep; # lines without timestamp = continuation of previous record
+        }
+    }
+
+    # detect if there was a change:
+    if ( @in == @out && $log_text ) {
+        return;
+    }
+
+    while (@out && $out[-1] eq '') { pop @out }
+    $self->store_data({ last_logs => (@out ? join("\n", @out)."\n" : '') });
+
+    $self->logf( 'INFO', "Log trimmed, preserving last %s, %d entries removed, %d entries remain.",
+        join(' ', @time_length_options),
+        @in - @out, scalar(@out) );
+
+    return;
+}
+
+sub logf {
+    my ($self, $level, $fmt, @args) = @_;
+    state %log_levels = (
+        'DEBUG'  => 4,
+        'NOTICE' => 3,
+        'INFO'   => 2,
+        'WARN'   => 1,
+        'ERROR'  => 0,
+    );
+    $level = $log_levels{uc $level} // int($level); # prevent non-ints by wars for unknown levels
+    return if $level > ($self->{config}{log_level} // 1); # default to WARN
+
+    @args = map { ref($_) eq 'CODE' ? $_->() : $_ } @args; # support list context for arguments,
+        # so you can pass sub { (localtime)[2,1,0] } and sprintf "%02d:%02d:%02d"
+
     my $dbh = C4::Context->dbh;
-    $dbh->do('LOCK TABLES plugin_data WRITE');
 
-    my $log_text = $self->retrieve_data('last_logs') // '';
-    $log_text .= '[' . DateTime->now->iso8601 . '] ' . $message . "\n";
-    $self->store_data( { last_logs => $log_text } );
+    my $date = DateTime->now( time_zone => 'local' );
+    my $date_s = $date->ymd('-') . ' ' . $date->hms(':');      # YYYY-MM-DD HH:MM:SS
+    my $log_text = '[' . $date_s . '] ' . sprintf($fmt, @args) . "\n";
 
-    $dbh->do('UNLOCK TABLES');
+    # Hacky way to update log without bring whole line back to Perl from MySQL:
+    $dbh->do('SET @new := ?, @max := ?', undef, $log_text, $MAX_LOG_LENGTH);
+    $dbh->do(q{
+        INSERT INTO plugin_data (plugin_class, plugin_key, plugin_value)
+        VALUES (?, ?, @new)
+        ON DUPLICATE KEY UPDATE
+          plugin_value =
+            IF(
+              CHAR_LENGTH(@all := CONCAT(IFNULL(plugin_value,''), @new)) <= @max,
+              @all,
+              IF(
+                (@p := LOCATE( (CHAR(10 USING utf8mb4) COLLATE utf8mb4_bin),
+                              (@tail := RIGHT(@all, @max)) )) IN (0, @max),
+                @tail,
+                SUBSTRING(@tail, @p + 1)
+              )
+            )
+    }, undef, $self->{plugin}{metadata}{class}, 'last_logs');
 
     return;
 }
@@ -139,6 +214,8 @@ sub get_template {
             plugin_homepage => $self->{plugin}{metadata}{homepage},
             plugin_last_upgraded => $self->retrieve_data('last_upgraded'),
             plugin_last_logs => $self->retrieve_data('last_logs'),
+            plugin_log_level => $self->retrieve_data('log_level') // 1,
+            plugin_log_preserve => $self->retrieve_data('log_preserve') // 3,
             plugin_default_method => $self->{plugin}{metadata}{default_method},
         },
     );
