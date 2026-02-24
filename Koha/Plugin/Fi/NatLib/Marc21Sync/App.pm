@@ -15,6 +15,8 @@ use base qw(
     Koha::Plugin::Fi::NatLib::Marc21Sync::App::Defaults
 );
 
+our $MAX_LOG_LENGTH = 200_000;
+
 sub new {
     my $class = shift;
     my $args = shift;
