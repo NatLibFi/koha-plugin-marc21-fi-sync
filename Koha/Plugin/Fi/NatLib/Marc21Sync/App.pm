@@ -83,6 +83,74 @@ sub set_log {
     return;
 }
 
+sub trim_log {
+    my ($self) = @_;
+
+    my $log_text = $self->retrieve_data('last_logs') // return;
+    my $preserve_days = $self->{config}{log_preserve} // 2;
+    my $date = DateTime->now( time_zone => 'local' )->subtract( days => $preserve_days );
+    my $date_s = $date->ymd('-') . 'T' . $date->hms(':');      # YYYY-MM-DDTHH:MM:SS
+
+    my @out;
+    my $keep = 0; # до першого валідного timestamp рядка (добре проти “обрізаних” початків)
+
+    for my $line (split /\n/, $log_text, -1) {
+        if ( $line =~ /^\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\]/ ) {
+            $keep = ($1 ge $date_s);     # string compare працює для ISO-формату
+            push @out, $line if $keep;
+        } else {
+            push @out, $line if $keep; # рядки без timestamp = продовження попереднього запису
+        }
+    }
+
+    while (@out && $out[-1] eq '') { pop @out }
+    $self->store_data({ last_logs => (@out ? join("\n", @out)."\n" : '') });
+
+    return;
+}
+
+sub logf {
+    my ($self, $level, $fmt, @args) = @_;
+    state %log_levels = (
+        'DEBUG'  => 4,
+        'NOTICE' => 3,
+        'INFO'   => 2,
+        'WARN'   => 1,
+        'ERROR'  => 0,
+    );
+    $level = $log_levels{uc $level} // int($level); # prevent non-ints by wars for unknown levels
+    return if $level > ($self->{config}{log_level} // 1); # default to WARN
+
+    @args = map { ref($_) eq 'CODE' ? $_->() : $_ } @args; # support list context for arguments,
+        # so you can pass sub { (localtime)[2,1,0] } and sprintf "%02d:%02d:%02d"
+
+    my $dbh = C4::Context->dbh;
+
+    my $date = DateTime->now( time_zone => 'local' );
+    my $date_s = $date->ymd('-') . 'T' . $date->hms(':');      # YYYY-MM-DDTHH:MM:SS
+    my $log_text = '[' . $date . '] ' . sprintf($fmt, @args) . "\n";
+
+    # Hacky way to update log without bring whole line back to Perl from MySQL:
+    $dbh->do(q{
+        INSERT INTO plugin_data (plugin_class, plugin_key, plugin_value)
+        VALUES (?, ?, (@new := CONVERT(? USING utf8mb4)))
+        ON DUPLICATE KEY UPDATE
+          plugin_value =
+            IF(
+              CHAR_LENGTH(@all := CONCAT(IFNULL(plugin_value,''), @new)) <= (@max := ?),
+              @all,
+              IF(
+                (@p := LOCATE( (CHAR(10 USING utf8mb4) COLLATE utf8mb4_bin),
+                              (@tail := RIGHT(@all, @max)) )) IN (0, @max),
+                @tail,
+                SUBSTRING(@tail, @p + 1)
+              )
+            )
+    }, undef, ref($self->{plugin}), 'last_logs', $log_text, $MAX_LOG_LENGTH);
+
+    return;
+}
+
 sub log {
     my ( $self, $message ) = @_;
 
