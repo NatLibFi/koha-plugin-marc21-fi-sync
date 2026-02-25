@@ -48,7 +48,11 @@ sub preconfig {
         $self->{configuration} = $cached_value;
     }
     # also make hash of configuration in $self->{config}:
-    $self->{config} = { map { $_->{name} => $_->{value} } @{$self->{configuration}} };
+    $self->{config} = {
+        ( map { $_->{name} => $_->{value} } @{$self->{configuration}} ),
+        log_level => $plugin->retrieve_data('log_level') // 1,
+        log_preserve => $plugin->retrieve_data('log_preserve') // 3,
+    };
     return $self;
 }
 
@@ -59,15 +63,28 @@ sub configure_plugin {
         foreach my $config ( @{$self->{configuration}} ) {
             $self->store_data( { $config->{name} => scalar $cgi->param( $config->{name} ) } );
         }
+        $self->store_data( { log_level => scalar $cgi->param('log_level') } );
+        $self->store_data( { log_preserve => scalar $cgi->param('log_preserve') } );
         Koha::Caches->get_instance('plugins')->clear_from_cache($self->{config_cache_key});
         $self->go_home();
     } elsif ( $cgi->param('restore_defaults') ) {
         foreach my $config ( @{$self->{configuration}} ) {
             $self->store_data( { $config->{name} => $config->{default} } );
         }
+        $self->store_data( { log_level => 1 } );
+        $self->store_data( { log_preserve => 3 } );
         Koha::Caches->get_instance('plugins')->clear_from_cache($self->{config_cache_key});
         $self->go_home();
-    } else {
+    } elsif ( $cgi->param('clean_logs_now') ) {
+        $self->store_data( { last_logs => '' } );
+        $self->go_configure();
+        # my $redirect_uri = $cgi->url( -full => 1, -query => 1 ); - this gives forever redirect because has POST params inside
+        # my $redirect_uri = $cgi->url( -absolute => 1, -path => 1 );
+        # if ( defined $ENV{QUERY_STRING} && length $ENV{QUERY_STRING} ) {
+        #     $redirect_uri .= '?' . $ENV{QUERY_STRING}; - this makes URI correct but not encoded
+        # }
+        # warn "Logs cleaned by user action, Redirecting to $redirect_uri\n";
+        # print $cgi->redirect( -uri => $redirect_uri, -status => 302 );    } else {
         my $template = $self->get_template({ file => 'templates/base/configure.tt' });
         $self->output_html( $template->output() );
     }
@@ -133,13 +150,14 @@ sub logf {
     my $log_text = '[' . $date . '] ' . sprintf($fmt, @args) . "\n";
 
     # Hacky way to update log without bring whole line back to Perl from MySQL:
+    $dbh->do('SET @new := ?, @max := ?', undef, $log_text, $MAX_LOG_LENGTH);
     $dbh->do(q{
         INSERT INTO plugin_data (plugin_class, plugin_key, plugin_value)
-        VALUES (?, ?, (@new := CONVERT(? USING utf8mb4)))
+        VALUES (?, ?, @new)
         ON DUPLICATE KEY UPDATE
           plugin_value =
             IF(
-              CHAR_LENGTH(@all := CONCAT(IFNULL(plugin_value,''), @new)) <= (@max := ?),
+              CHAR_LENGTH(@all := CONCAT(IFNULL(plugin_value,''), @new)) <= @max,
               @all,
               IF(
                 (@p := LOCATE( (CHAR(10 USING utf8mb4) COLLATE utf8mb4_bin),
@@ -148,7 +166,7 @@ sub logf {
                 SUBSTRING(@tail, @p + 1)
               )
             )
-    }, undef, ref($self->{plugin}), 'last_logs', $log_text, $MAX_LOG_LENGTH);
+    }, undef, $self->{plugin}{metadata}{class}, 'last_logs');
 
     return;
 }
@@ -209,6 +227,8 @@ sub get_template {
             plugin_homepage => $self->{plugin}{metadata}{homepage},
             plugin_last_upgraded => $self->retrieve_data('last_upgraded'),
             plugin_last_logs => $self->retrieve_data('last_logs'),
+            plugin_log_level => $self->retrieve_data('log_level') // 1,
+            plugin_log_preserve => $self->retrieve_data('log_preserve') // 3,
             plugin_default_method => $self->{plugin}{metadata}{default_method},
         },
     );

@@ -33,32 +33,6 @@ our $metadata = {
 
 our $configuration = [
     @$Koha::Plugin::Fi::NatLib::Marc21Sync::App::Defaults::CONFIGURATION,
-    {   name => 'log_level',
-        type => 'select',
-        default => 1,
-        name_display => 'Log level',
-        description => 'log level for plugin messages',
-        options => [
-            { value => 4, label => 'Debug'  },
-            { value => 3, label => 'Notice' },
-            { value => 2, label => 'Info'   },
-            { value => 1, label => 'Warn'   },
-            { value => 0, label => 'Error'  },
-        ],
-    },
-    {   name => 'log_preserve',
-        type => 'select',
-        default => 3,
-        name_display => 'Preserve log for',
-        description => 'how long to store log data',
-        options => [
-            { value => 1, label => '1 day' },
-            { value => 2, label => '2 days' },
-            { value => 7, label => '1 week' },
-            { value => 31, label => '1 month' },
-            { value => 92, label => '3 months' },
-        ],
-    },
 ];
 
 

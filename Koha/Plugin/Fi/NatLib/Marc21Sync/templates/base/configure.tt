@@ -35,6 +35,8 @@
         <h2>[% metadata.plugin_name %] Configuration</h2>
     </div>
 
+    <hr/>
+
     <form method="POST">
         <input type="hidden" name="class" value="[% CLASS %]"/>
         <input type="hidden" name="method" value="[% METHOD %]"/>
@@ -103,13 +105,49 @@
         </div>
         [% END %]
 
+        <hr/>
+
+        <div class="form-group row hoverable">
+            <div class="col-5">
+                <label for="log_level" class="col-form-label">Log level:</label>
+                <select id="log_level" name="log_level" class="form-control">
+                    <option value="4" [% IF metadata.plugin_log_level == 4 %]selected="selected"[% END %]>Debug</option>
+                    <option value="3" [% IF metadata.plugin_log_level == 3 %]selected="selected"[% END %]>Notice</option>
+                    <option value="2" [% IF metadata.plugin_log_level == 2 %]selected="selected"[% END %]>Info</option>
+                    <option value="1" [% IF metadata.plugin_log_level == 1 %]selected="selected"[% END %]>Warn</option>
+                    <option value="0" [% IF metadata.plugin_log_level == 0 %]selected="selected"[% END %]>Error</option>
+                </select>
+                <small class="form-text text-muted">log level for plugin messages</small>
+            </div>
+            <div class="col-5">
+                <label for="log_preserve" class="col-form-label">Preserve log for:</label>
+                <select id="log_preserve" name="log_preserve" class="form-control">
+                    <option value="1" [% IF metadata.plugin_log_preserve == 1 %]selected="selected"[% END %]>1 day</option>
+                    <option value="2" [% IF metadata.plugin_log_preserve == 2 %]selected="selected"[% END %]>2 days</option>
+                    <option value="7" [% IF metadata.plugin_log_preserve == 7 %]selected="selected"[% END %]>1 week</option>
+                    <option value="31" [% IF metadata.plugin_log_preserve == 31 %]selected="selected"[% END %]>1 month</option>
+                    <option value="92" [% IF metadata.plugin_log_preserve == 92 %]selected="selected"[% END %]>3 months</option>
+                </select>
+                <small class="form-text text-muted">how long to store log data</small>
+            </div>
+            <div class="col-2">
+                <label class="col-form-label">&nbsp;</label>
+                <input type="submit" name="clean_logs_now" class="btn btn-warning form-control" value="Clean logs now"
+                    onclick="return confirm('Are you sure you want to clean all logs now?');"
+                    title="This will remove all current plugin logs now." />
+                <small class="form-text text-muted">&nbsp;</small>
+            </div>
+        </div>
+
+        <hr/>
+
         <input type="submit" name="save" value="Save configuration" />
         <input type="submit" name="restore_defaults" class="btn btn-danger" value="Reset to defaults"
             onclick="return confirm('Are you sure you want to reset all CONFIGURATION settings to defaults?');"
             title="This will reset all settings to plugin defaults and erase all changes you have made."
         />
+
     </form>
-    <hr/>
 
     <div class="card">
         <div class="card-body">
